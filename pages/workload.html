@@ -137,7 +137,6 @@
 
 <script>
 var BACKEND = 'http://localhost/committee-management/backend/api';
-var GEMINI_KEY = 'AQ.Ab8RN6KqzYPMg3v3RoiqwyNtdBYRrbhCKBNWlrYwAnAhC_hSpw';
 var allMembers = [];
 var allTasks = [];
 var allCommittees = [];
@@ -377,17 +376,24 @@ function analyzeWorkload() {
 
     var prompt = 'You are an AI workload analyst for SK Committee System Philippines.\n\nOverloaded members (5+ tasks): ' + overStr + '\nUnderloaded members (less than 2 tasks): ' + underStr + '\nBalanced members (2-5 tasks): ' + balStr + '\n\nAnalyze and respond ONLY in JSON (no markdown):\n{"status":"balanced or needs_rebalancing","overloaded_count":0,"underloaded_count":0,"recommendations":[{"action":"redistribute","from_member":"name","to_member":"name","reason":"brief reason"}],"summary":"brief analysis","alert_level":"green or yellow or red"}';
 
-    fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY, {
+    fetch(BACKEND + '/ai/generate.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({contents: [{parts: [{text: prompt}]}]})
+        body: JSON.stringify({prompt: prompt})
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        var text = data.candidates && data.candidates[0] ? data.candidates[0].content.parts[0].text : '';
-        text = text.replace(/```json\n?|\n?```/g, '').trim();
+        if (data.error) {
+            throw new Error(data.error.message || 'Gemini API Error');
+        }
+        var part = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts ? data.candidates[0].content.parts[0] : null;
+        if (!part || !part.text) {
+            throw new Error('No content returned by AI');
+        }
+        var text = part.text.replace(/```json\n?|```/gi, '').trim();
         var jsonStart = text.indexOf('{');
         var jsonEnd = text.lastIndexOf('}');
+        if (jsonStart === -1 || jsonEnd === -1) throw new Error('Invalid JSON format from AI');
         var ai = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
 
         var panel = document.getElementById('aiPanel');

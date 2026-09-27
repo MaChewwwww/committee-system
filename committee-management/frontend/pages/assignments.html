@@ -178,7 +178,6 @@
 
 <script>
 var BACKEND = 'https://cmas.sjdm-legislative.com/backend/api';
-var GEMINI_KEY = 'AQ.Ab8RN6KqzYPMg3v3RoiqwyNtdBYRrbhCKBNWlrYwAnAhC_hSpw';
 var allAssignments = [];
 var allMembers = [];
 var allCommittees = [];
@@ -405,19 +404,25 @@ function getAIRecommendation() {
 
         var prompt = 'You are an AI for SK Committee Management System Philippines.\n\nCommittee: ' + (committee ? committee.name : '') + '\nType: ' + (committee ? (committee.type || 'General') : '') + '\nPurpose: ' + (committee ? (committee.purpose || 'Not specified') : '') + '\nRequired Skills: ' + (skills || 'Any') + '\nMax Workload: ' + maxWorkload + ' tasks\nPreferred Position: ' + (position || 'Any') + '\n\nEligible Members:\n' + membersList + '\nRecommend TOP 3 best members. Respond ONLY in JSON format with no markdown:\n{"recommendations":[{"member_id":"uuid","member_name":"name","score":95,"reason":"brief reason","skills_match":"high","workload_status":"light"}],"summary":"brief summary"}';
 
-        fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY, {
+        fetch(BACKEND + '/ai/generate.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({contents: [{parts: [{text: prompt}]}]})
+            body: JSON.stringify({prompt: prompt})
         })
         .then(function(r) { return r.json(); })
         .then(function(geminiData) {
-            var responseText = geminiData.candidates && geminiData.candidates[0] ? geminiData.candidates[0].content.parts[0].text : '';
-            responseText = responseText.replace(/```json\n?|\n?```/g, '').trim();
+            if (geminiData.error) {
+                throw new Error(geminiData.error.message || 'Gemini API Error');
+            }
+            var part = geminiData.candidates && geminiData.candidates[0] && geminiData.candidates[0].content && geminiData.candidates[0].content.parts ? geminiData.candidates[0].content.parts[0] : null;
+            if (!part || !part.text) {
+                throw new Error('No content returned by AI');
+            }
+            var responseText = part.text.replace(/```json\n?|```/gi, '').trim();
 
             var jsonStart = responseText.indexOf('{');
             var jsonEnd = responseText.lastIndexOf('}');
-            if (jsonStart === -1 || jsonEnd === -1) throw new Error('Invalid response');
+            if (jsonStart === -1 || jsonEnd === -1) throw new Error('Invalid JSON response format from AI');
 
             var aiData = JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
             var recs = aiData.recommendations || [];

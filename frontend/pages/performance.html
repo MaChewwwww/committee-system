@@ -138,7 +138,6 @@
 
 <script>
 var BACKEND = 'https://cmas.sjdm-legislative.com/backend/api';
-var GEMINI_KEY = 'AQ.Ab8RN6KqzYPMg3v3RoiqwyNtdBYRrbhCKBNWlrYwAnAhC_hSpw';
 var allMembers = [];
 var allCommittees = [];
 var performanceData = [];
@@ -314,19 +313,26 @@ function analyzePerformance() {
         membersList += '- ' + m.member_name + ' | Score:' + m.final_score + '% | Tasks:' + m.completed_tasks + '/' + m.total_tasks + ' | Attendance:' + m.attendance_rate + '% | OnTime:' + m.on_time_rate + '% | Grade:' + m.grade + '\n';
     }
 
-    var prompt = 'You are a performance analyst for SK Committee System Philippines.\n\nMember Performance:\n' + membersList + '\nScoring: Task Completion=50%, Attendance=20%, On-Time=30%\n\nRespond ONLY in JSON (no markdown):\n{"top_performer":"name","needs_improvement"🙁"name1"],"insights"🙁"insight1","insight2","insight3"],"recommendations"🙁"rec1","rec2"],"overall_team_score":0,"team_status":"excellent or good or average or poor"}';
+    var prompt = 'You are a performance analyst for SK Committee System Philippines.\n\nMember Performance:\n' + membersList + '\nScoring: Task Completion=50%, Attendance=20%, On-Time=30%\n\nRespond ONLY in JSON (no markdown):\n{"top_performer":"name","needs_improvement":["name1"],"insights":["insight1","insight2","insight3"],"recommendations":["rec1","rec2"],"overall_team_score":0,"team_status":"excellent or good or average or poor"}';
 
-    fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY, {
+    fetch(BACKEND + '/ai/generate.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({contents: [{parts: [{text: prompt}]}]})
+        body: JSON.stringify({prompt: prompt})
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        var text = data.candidates && data.candidates[0] ? data.candidates[0].content.parts[0].text : '';
-        text = text.replace(/```json\n?|\n?```/g, '').trim();
+        if (data.error) {
+            throw new Error(data.error.message || 'Gemini API Error');
+        }
+        var part = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts ? data.candidates[0].content.parts[0] : null;
+        if (!part || !part.text) {
+            throw new Error('No content returned by AI');
+        }
+        var text = part.text.replace(/```json\n?|```/gi, '').trim();
         var jsonStart = text.indexOf('{');
         var jsonEnd = text.lastIndexOf('}');
+        if (jsonStart === -1 || jsonEnd === -1) throw new Error('Invalid JSON format from AI');
         var ai = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
 
         document.getElementById('aiPanel').classList.remove('hidden');
@@ -362,7 +368,7 @@ function analyzePerformance() {
     })
     .catch(function(e) {
         document.getElementById('aiPanel').classList.remove('hidden');
-        document.getElementById('aiSummary') && (document.getElementById('aiSummary').textContent = 'AI error: ' + e.message);
+        document.getElementById('aiInsights').innerHTML = '<p class="text-red-200 text-xs">AI error: ' + e.message + '</p>';
         alert('AI analysis failed: ' + e.message);
     })
     .finally(function() {

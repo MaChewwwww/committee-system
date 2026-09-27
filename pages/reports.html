@@ -125,7 +125,6 @@
 
 <script>
 var BACKEND = 'http://localhost/committee-management/backend/api';
-var GEMINI_KEY = 'AQ.Ab8RN6KqzYPMg3v3RoiqwyNtdBYRrbhCKBNWlrYwAnAhC_hSpw';
 var allMembers = [];
 var allCommittees = [];
 var allTasks = [];
@@ -326,16 +325,21 @@ function generateAIReport() {
 
     var prompt = 'You are a report generator for SK Committee Management System in the Philippines.\n\nData:\n- Committees: ' + allCommittees.length + '\n- Members: ' + allMembers.length + '\n- Tasks: ' + allTasks.length + '\n- Pending: ' + pendingTasks + '\n- Completed: ' + completedTasks + '\n\nCommittees:\n' + committeesStr + '\nMembers:\n' + membersStr + '\nGenerate a comprehensive formal report. Include:\n1. Executive Summary\n2. Committee Status Overview\n3. Member Performance\n4. Workload Analysis\n5. Key Findings\n6. Recommendations\n7. Conclusion\n\nUse formal Filipino-English style.';
 
-    fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY, {
+    fetch(BACKEND + '/ai/generate.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({contents: [{parts: [{text: prompt}]}]})
+        body: JSON.stringify({prompt: prompt})
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        var text = data.candidates && data.candidates[0]
-            ? data.candidates[0].content.parts[0].text
-            : 'Unable to generate report';
+        if (data.error) {
+            throw new Error(data.error.message || 'Gemini API Error');
+        }
+        var part = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts ? data.candidates[0].content.parts[0] : null;
+        if (!part || !part.text) {
+            throw new Error('No content returned by AI');
+        }
+        var text = part.text;
         document.getElementById('aiReportPanel').classList.remove('hidden');
         document.getElementById('aiReportContent').textContent = text;
 
